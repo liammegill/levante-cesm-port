@@ -1,0 +1,100 @@
+diff --git a/config/cesm/machines/config_batch.xml b/config/cesm/machines/config_batch.xml
+index a0212cc5b..3afa30b32 100644
+--- a/config/cesm/machines/config_batch.xml
++++ b/config/cesm/machines/config_batch.xml
+@@ -602,4 +602,17 @@
+       <queue walltimemax="00:60:00" nodemin="1" nodemax="50" default="true">default</queue>
+     </queues>
+   </batch_system>
++  <batch_system MACH="levante" type="slurm">
++    <batch_submit>sbatch</batch_submit>
++    <submit_args>
++      <arg flag="--time" name="$JOB_WALLCLOCK_TIME"/>
++      <arg flag="-p" name="$JOB_QUEUE"/>
++      <arg flag="--account" name="$PROJECT"/>
++    </submit_args>
++    <queues>
++      <queue walltimemin="0" walltimemax="08:00:00" nodemin="1" nodemax="500" default="true">compute</queue>
++      <queue walltimemin="0" walltimemax="12:00:00" nodemin="1" nodemax="30">interactive</queue>
++      <queue walltimemin="0" walltimemax="7-00:00:00" nodemin="1" nodemax="20">shared</queue>
++    </queues>
++  </batch_system>
+ </config_batch>
+diff --git a/config/cesm/machines/config_compilers.xml b/config/cesm/machines/config_compilers.xml
+index 1e601b90e..c72b35e08 100644
+--- a/config/cesm/machines/config_compilers.xml
++++ b/config/cesm/machines/config_compilers.xml
+@@ -1274,4 +1274,12 @@ using a fortran linker.
+   </SLIBS>
+ </compiler>
+ 
++<compiler MACH="levante">
++  <SCC>icc</SCC>
++  <SCXX>icpc</SCXX>
++  <SFC>ifort</SFC>
++  <SUPPORTS_CXX>TRUE</SUPPORTS_CXX>
++  <NETCDF_C_PATH>/sw/spack-levante/netcdf-c-4.8.1-2k3cmu</NETCDF_C_PATH>
++  <NETCDF_FORTRAN_PATH>/sw/spack-levante/netcdf-fortran-4.5.3-k6xq5g</NETCDF_FORTRAN_PATH>
++</compiler>
+ </config_compilers>
+diff --git a/config/cesm/machines/config_machines.xml b/config/cesm/machines/config_machines.xml
+index 8b859ca1f..368527bd4 100644
+--- a/config/cesm/machines/config_machines.xml
++++ b/config/cesm/machines/config_machines.xml
+@@ -2608,6 +2608,56 @@ This allows using a different mpirun command to launch unit tests
+     </module_system>
+   </machine>
+ 
++  <machine MACH="levante">
++    <DESC>DKRZ Levante, 2x AMD EPYC Milan (128 cores/node, SMT2=256), OS is Linux, batch system is Slurm</DESC>
++    <NODENAME_REGEX>^levante</NODENAME_REGEX>
++    <OS>LINUX</OS>
++    <COMPILERS>intel,gnu</COMPILERS>
++    <MPILIBS>openmpi</MPILIBS>
++    <PROJECT>bd1062</PROJECT>
++    <CIME_OUTPUT_ROOT>/scratch/b/$ENV{USER}</CIME_OUTPUT_ROOT>
++    <DIN_LOC_ROOT>/work/bd1062/b309257/cam6-contrail-cirrus/inputdata</DIN_LOC_ROOT>
++    <DIN_LOC_ROOT_CLMFORC>/work/bd1062/b309257/cam6-contrail-cirrus/inputdata/atm/datm7</DIN_LOC_ROOT_CLMFORC>
++    <DOUT_S_ROOT>/work/bd1062/b309257/cam6-contrail-cirrus/archive/$CASE</DOUT_S_ROOT>
++    <BASELINE_ROOT>/work/bd1062/b309257/cam6-contrail-cirrus/cesm_baselines</BASELINE_ROOT>
++    <CCSM_CPRNC>UNSET</CCSM_CPRNC>
++    <GMAKE_J>8</GMAKE_J>
++    <BATCH_SYSTEM>slurm</BATCH_SYSTEM>
++    <SUPPORTED_BY>liam.megill -at- dlr.de</SUPPORTED_BY>
++    <MAX_TASKS_PER_NODE>256</MAX_TASKS_PER_NODE>
++    <MAX_MPITASKS_PER_NODE>128</MAX_MPITASKS_PER_NODE>
++    <PROJECT_REQUIRED>TRUE</PROJECT_REQUIRED>
++    <mpirun mpilib="default">
++      <executable>srun</executable>
++      <arguments>
++        <arg name="label"> --label</arg>
++        <arg name="num_tasks"> -n {{ total_tasks }}</arg>
++      </arguments>
++    </mpirun>
++    <module_system type="module">
++      <init_path lang="perl">/usr/share/Modules/init/perl.pm</init_path>
++      <init_path lang="python">/usr/share/Modules/init/python.py</init_path>
++      <init_path lang="csh">/usr/share/Modules/init/csh</init_path>
++      <init_path lang="sh">/usr/share/Modules/init/sh</init_path>
++      <cmd_path lang="perl">/usr/bin/modulecmd perl</cmd_path>
++      <cmd_path lang="python">/usr/bin/modulecmd python</cmd_path>
++      <cmd_path lang="sh">module</cmd_path>
++      <cmd_path lang="csh">module</cmd_path>
++      <modules>
++        <command name="load">python3/2023.01-gcc-11.2.0</command>
++        <command name="load">intel-oneapi-compilers/2022.0.1-gcc-11.2.0</command>
++        <command name="load">intel-oneapi-mkl/2022.0.1-gcc-11.2.0</command>
++        <command name="load">openmpi/4.1.2-intel-2021.5.0</command>
++        <command name="load">netcdf-c/4.8.1-openmpi-4.1.2-intel-2021.5.0</command>
++        <command name="load">netcdf-fortran/4.5.3-openmpi-4.1.2-intel-2021.5.0</command>
++        <command name="load">parallel-netcdf/1.12.2-openmpi-4.1.2-intel-2021.5.0</command>
++        <command name="load">esmf/8.2.0-intel-2021.5.0</command>
++      </modules>
++    </module_system>
++    <environment_variables>
++      <env name="PERL5LIB">/work/bd1062/b309257/conda_envs/cesm-perl526/lib/site_perl/5.26.2/x86_64-linux-thread-multi:/work/bd1062/b309257/conda_envs/cesm-perl526/lib/site_perl/5.26.2</env>
++    </environment_variables>
++  </machine>
+   <default_run_suffix>
+     <default_run_exe>${EXEROOT}/cesm.exe </default_run_exe>
+     <default_run_misc_suffix> >> cesm.log.$LID 2>&amp;1 </default_run_misc_suffix>
