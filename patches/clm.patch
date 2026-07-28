@@ -1,0 +1,125 @@
+diff --git a/cime_config/buildlib b/cime_config/buildlib
+index b3f49f991..4c27585fb 100755
+--- a/cime_config/buildlib
++++ b/cime_config/buildlib
+@@ -13,7 +13,7 @@ _LIBDIR = os.path.join(_CIMEROOT, "scripts", "Tools")
+ sys.path.append(_LIBDIR)
+ 
+ from standard_script_setup import *
+-from CIME.buildlib import parse_input
++from CIME.buildlib import parse_input, run_gmake
+ from CIME.case import Case
+ from CIME.utils import run_cmd, expect
+ 
+@@ -101,11 +101,11 @@ def _main_func():
+         macfile  = os.path.join(caseroot, "Macros.%s" % mach)
+ 
+         if clm_phys == "clm4_0":
+-            cmd = "%s complib -j %d MODEL=clm COMPLIB=%s -f %s MACFILE=%s USER_CPPDEFS='%s'" \
+-                  % (gmake, gmake_j, complib, makefile, macfile, clm_cppdefs )
++            cmd = "%s complib -j %d MODEL=clm COMPLIB=%s -f %s MACFILE=%s CASEROOT=%s CASETOOLS=%s USER_CPPDEFS='%s'" \
++                  % (gmake, gmake_j, complib, makefile, macfile, caseroot, casetools, clm_cppdefs )
+         else:
+-            cmd = "%s complib -j %d MODEL=clm COMPLIB=%s -f %s MACFILE=%s " \
+-                  % (gmake, gmake_j, complib, makefile, macfile )
++            run_gmake(case, "clm", libroot, bldroot, libname="clm")
++            return
+ 
+         rc, out, err = run_cmd(cmd)
+         logger.info("%s: \n\n output:\n %s \n\n err:\n\n%s\n"%(cmd,out,err))
+diff --git a/src/biogeochem/SatellitePhenologyMod.F90 b/src/biogeochem/SatellitePhenologyMod.F90
+index fedf81e4d..47b8de6fb 100644
+--- a/src/biogeochem/SatellitePhenologyMod.F90
++++ b/src/biogeochem/SatellitePhenologyMod.F90
+@@ -13,6 +13,7 @@ module SatellitePhenologyMod
+   use shr_strdata_mod , only : shr_strdata_print, shr_strdata_advance
+   use shr_kind_mod    , only : r8 => shr_kind_r8
+   use shr_kind_mod    , only : CL => shr_kind_CL
++  use shr_kind_mod    , only : CXX => shr_kind_CXX
+   use shr_log_mod     , only : errMsg => shr_log_errMsg
+   use decompMod       , only : bounds_type
+   use abortutils      , only : endrun
+@@ -107,7 +108,7 @@ contains
+     character(*), parameter    :: F00 = "('(laidyn_init) ',4a)"
+     character(*), parameter    :: laiString = "LAI"  ! base string for field string
+     integer     , parameter    :: numLaiFields = 16  ! number of fields to build field string
+-    character(SHR_KIND_CXX)    :: fldList            ! field string
++    character(len=CXX)        :: fldList            ! field string
+     !-----------------------------------------------------------------------
+     !
+     ! deal with namelist variables here in init
+diff --git a/src/biogeophys/SoilMoistureStreamMod.F90 b/src/biogeophys/SoilMoistureStreamMod.F90
+index 8e606418f..52af7f166 100644
+--- a/src/biogeophys/SoilMoistureStreamMod.F90
++++ b/src/biogeophys/SoilMoistureStreamMod.F90
+@@ -11,6 +11,7 @@ module SoilMoistureStreamMod
+   use shr_strdata_mod , only : shr_strdata_print, shr_strdata_advance
+   use shr_kind_mod    , only : r8 => shr_kind_r8
+   use shr_kind_mod    , only : CL => shr_kind_CL
++  use shr_kind_mod    , only : CXX => shr_kind_CXX
+   use shr_log_mod     , only : errMsg => shr_log_errMsg
+   use decompMod       , only : bounds_type
+   use abortutils      , only : endrun
+@@ -96,7 +97,7 @@ contains
+     character(*), parameter    :: subName = "('PrescribedSoilMoistureInit')"
+     character(*), parameter    :: F00 = "('(PrescribedSoilMoistureInit) ',4a)"
+     character(*), parameter    :: soilmString = "H2OSOI"  ! base string for field string
+-    character(SHR_KIND_CXX)    :: fldList            ! field string
++    character(len=CXX)        :: fldList            ! field string
+     !-----------------------------------------------------------------------
+     !
+     ! deal with namelist variables here in init
+diff --git a/src/biogeophys/UrbanTimeVarType.F90 b/src/biogeophys/UrbanTimeVarType.F90
+index 8c51bdf2f..ef7a4e24d 100644
+--- a/src/biogeophys/UrbanTimeVarType.F90
++++ b/src/biogeophys/UrbanTimeVarType.F90
+@@ -125,7 +125,7 @@ contains
+    character(len=CL)  :: stream_fldFileName_urbantv           ! urban tv streams filename
+    character(len=CL)  :: urbantvmapalgo = 'nn'                ! mapping alogrithm for urban ac
+    character(len=CL)  :: urbantv_tintalgo = 'linear'          ! time interpolation alogrithm
+-   character(SHR_KIND_CL)  :: fldList                         ! field string
++   character(len=CL)      :: fldList                         ! field string
+    character(*), parameter :: urbantvString = "tbuildmax_"    ! base string for field string
+    character(*), parameter :: subName = "('urbantv_init')"
+    character(*), parameter :: F00 = "('(urbantv_init) ',4a)"
+diff --git a/src/cpl/lnd_comp_mct.F90 b/src/cpl/lnd_comp_mct.F90
+index 923d6f6c3..e0dccc569 100644
+--- a/src/cpl/lnd_comp_mct.F90
++++ b/src/cpl/lnd_comp_mct.F90
+@@ -665,33 +665,15 @@ contains
+     !
+     ! !DESCRIPTION:
+     ! Handle resume signals for Data Assimilation (DA)
++    ! NOTE: disabled -- lnd_resume is not available in this CIME driver version (cime5.8.16);
++    ! not needed for this project (no data assimilation is used).
+     !
+     ! !USES:
+-    use shr_kind_mod     , only : shr_kind_cl
+-    use seq_infodata_mod , only : seq_infodata_type, seq_infodata_GetData
+-    use clm_time_manager , only : update_DA_nstep
+-    use seq_comm_mct     , only : num_inst_lnd
+-    use clm_varctl       , only : iulog
+-    use clm_varctl       , only : inst_index
++    use seq_infodata_mod , only : seq_infodata_type
+     implicit none
+     ! !ARGUMENTS:
+     type(seq_infodata_type), intent(IN) :: infodata     ! CESM driver level info data
+-    ! !LOCAL VARIABLES:
+-    character(len=SHR_KIND_CL) :: lnd_resume(num_inst_lnd) ! land resume file (for data assimulation)
+-    logical :: resume_from_data_assim                      ! flag if we are resuming after data assimulation was done
+     !---------------------------------------------------------------------------
+-
+-    call seq_infodata_GetData(infodata, lnd_resume=lnd_resume )
+-    ! If lnd_resume is blank, restart file wasn't modified
+-    if ( len_trim(lnd_resume(min(num_inst_lnd,inst_index))) == 0 )then
+-       resume_from_data_assim = .false.
+-    ! Otherwise restart was modified and we are resuming from data assimulation
+-    else
+-       resume_from_data_assim = .true.
+-       write(iulog,*) 'resume_from_DA ', resume_from_data_assim
+-    end if
+-    if ( resume_from_data_assim ) call update_DA_nstep()
+- 
+   end subroutine lnd_handle_resume
+ 
+ end module lnd_comp_mct

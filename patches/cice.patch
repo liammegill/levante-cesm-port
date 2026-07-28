@@ -1,0 +1,54 @@
+diff --git a/cime_config/buildlib b/cime_config/buildlib
+index d90b500..ad5fd90 100755
+--- a/cime_config/buildlib
++++ b/cime_config/buildlib
+@@ -10,7 +10,7 @@ sys.path.append(os.path.join(CIMEROOT, "scripts", "Tools"))
+ from standard_script_setup import *
+ from CIME.case import Case
+ from CIME.utils import expect, run_cmd
+-from CIME.buildlib import parse_input
++from CIME.buildlib import parse_input, run_gmake
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -57,13 +57,8 @@ def _build_cice():
+         complib = os.path.join(libroot,"libice.a")
+         makefile = os.path.join(casetools, "Makefile")
+ 
+-        cmd = "%s complib -j %d MODEL=cice COMPLIB=%s -f %s USER_CPPDEFS=\"%s\"" \
+-            % (gmake, gmake_j, complib, makefile, cice_cppdefs )
++        run_gmake(case, "ice", libroot, bldroot, libname="ice", user_cppdefs=cice_cppdefs)
+ 
+-        rc, out, err = run_cmd(cmd, from_dir=bldroot)
+-        expect(rc == 0, "Command %s failed rc=%d\nout=%s\nerr=%s" % (cmd, rc, out, err))
+-
+-        logger.info("Command %s completed with output %s\nerr %s" ,cmd, out, err)
+ 
+ ###############################################################################
+ 
+diff --git a/src/drivers/cesm/ice_prescribed_mod.F90 b/src/drivers/cesm/ice_prescribed_mod.F90
+index 97b43ae..4d95be1 100644
+--- a/src/drivers/cesm/ice_prescribed_mod.F90
++++ b/src/drivers/cesm/ice_prescribed_mod.F90
+@@ -68,7 +68,7 @@ module ice_prescribed_mod
+ 
+ !EOP
+ 
+-   integer(SHR_KIND_IN),parameter :: nFilesMaximum = 400 ! max number of files
++   integer(kind=int_kind),parameter :: nFilesMaximum = 400 ! max number of files
+    integer(kind=int_kind)         :: stream_year_first   ! first year in stream to use
+    integer(kind=int_kind)         :: stream_year_last    ! last year in stream to use
+    integer(kind=int_kind)         :: model_year_align    ! align stream_year_first
+diff --git a/src/source/ice_atmo.F90 b/src/source/ice_atmo.F90
+index 058ab32..c573757 100644
+--- a/src/source/ice_atmo.F90
++++ b/src/source/ice_atmo.F90
+@@ -377,7 +377,7 @@
+       !------------------------------------------------------------
+       ! iterate to converge on Z/L, ustar, tstar and qstar
+       !------------------------------------------------------------
+-      ustar_prev = 2.0_SHR_KIND_R8 * ustar
++      ustar_prev = 2.0_dbl_kind * ustar
+       do iter =1,flux_convergence_max_iteration
+          do ij = 1, icells
+             i = indxi(ij)
