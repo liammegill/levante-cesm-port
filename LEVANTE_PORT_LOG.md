@@ -140,6 +140,26 @@ rm Macros.make Macros.cmake
 
 ---
 
+### 3.3 Keeping saved patches in sync with the live config
+
+When setting up a second, parallel port (`cam6_2_022`, see the
+`cesm2.1.3-cime5.8.16-cam6_2_022` branch), reapplying the patches saved in
+this repository produced a case with no `LD_LIBRARY_PATH` entry in
+`env_mach_specific.xml` at all, despite `git diff --stat` showing
+`config_machines.xml` as changed. The saved `cime.patch` had been exported
+early in the original session, before the runtime-library fixes in §9 were
+made to the live `config_machines.xml` — and was never re-exported
+afterward, so it silently carried a stale (pre-fix) version of the file.
+`git apply` succeeds identically whether a patch is current or stale, so
+this doesn't surface until something built from the saved patch behaves
+differently from the live setup, often much later and looking like a new
+bug rather than an old, un-synced fix.
+
+Lesson: any time the live machine config is edited after a patch has
+already been exported and saved, the patch needs re-exporting (`git diff`
+in the live checkout, overwrite the saved `.patch` file) before it can be
+trusted as an accurate record.
+
 ## 4. Machine port: `config_batch.xml`
 
 Monolithic file, `cime/config/cesm/machines/config_batch.xml`. Uses `<arg flag="..." name="..."/>` syntax for `submit_args`:
@@ -304,6 +324,50 @@ cp -r /tmp/cospv2_tmp/src components/cam/src/physics/cosp2/src
 
 ---
 
+### 7.4 Nested optional externals: `clubb`, `silhs`, `atmos_phys`, `fates`
+
+Building a second CAM tag (`cam6_2_022`) from a fresh checkout failed with
+compile errors in `clubb_intr.F90` and `clmfates_paraminterfaceMod.F90` —
+both "error #7002: Error in opening the compiled module file," meaning the
+underlying external source was entirely absent rather than just
+misconfigured. The working `cam6_2_020` checkout has these same source
+directories (`components/cam/src/physics/clubb`, `components/clm/src/fates`)
+populated, despite both tags marking `required = True` for these externals
+in their respective `Externals_CAM.cfg`/`Externals_CLM.cfg` files.
+
+Per `checkout_externals --help`: by default, only the externals listed
+directly in the top-level `Externals.cfg` are checked out. Nested externals
+-- those listed inside a sub-project's own `Externals_CAM.cfg`/
+`Externals_CLM.cfg`, such as `clubb`, `silhs`, `atmos_phys`, and `fates` --
+are treated as optional regardless of their own internal `required` flag,
+unless targeted explicitly. The `-o` ("also checkout optional externals")
+flag does not reach into nested files either; each optional nested external
+must be fetched by name, pointed at its own specific `Externals_*.cfg`:
+
+```bash
+cd components/cam
+../../manage_externals/checkout_externals -e Externals_CAM.cfg -o clubb silhs atmos_phys
+
+cd ../clm
+../../manage_externals/checkout_externals -e Externals_CLM.cfg -o fates
+```
+
+Two things worth knowing about this step:
+
+1. `checkout_externals` refuses to fetch anything (even unrelated
+   externals) if it detects any repository already in a modified/"dirty"
+   state -- which applying the CLM/CICE/MOSART/CISM source patches (§6)
+   triggers immediately. Fetch everything, including these optional
+   externals, *before* applying source patches, not after. If patches are
+   already applied when this is hit, temporarily revert them
+   (`git checkout -- .` in each affected component directory), fetch, then
+   reapply.
+2. This same requirement almost certainly applied to the original
+   `cam6_2_020` setup too, since its `clubb`/`fates` source is present --
+   but the step wasn't captured in this log at the time it was actually
+   done. Treat the reproduction runbook (§13) as relying on this having
+   been done manually at some point during the original session.
+
 ## 8. Input data acquisition
 
 `./check_input_data` lists every file a compset needs under `DIN_LOC_ROOT`; `--download` attempts to fetch missing ones automatically.
@@ -429,6 +493,13 @@ mkdir -p components/cam/src/physics/cosp2
 cp -r /tmp/cospv2_tmp/src components/cam/src/physics/cosp2/src
 rm -rf /tmp/cospv2_tmp
 
+# 3b. Fetch optional nested externals not covered by the default checkout (see §7.4)
+cd components/cam
+../../manage_externals/checkout_externals -e Externals_CAM.cfg -o clubb silhs atmos_phys
+cd ../clm
+../../manage_externals/checkout_externals -e Externals_CLM.cfg -o fates
+cd ../..
+
 # 4. Apply the machine-port and source patches
 git apply ~/levante_port_backup/patches/cime.patch --directory=cime
 git apply ~/levante_port_backup/patches/clm.patch --directory=components/clm
@@ -465,4 +536,4 @@ module load subversion
 ./case.submit
 ```
 
-`git apply` in step 4 has not been tested against a genuinely clean checkout — the patches were captured from an already-modified working tree during an interactive session. If `git apply` reports conflicts, re-applying each change manually using §6 as the reference is the fallback.
+`git apply` in step 4 has been confirmed to work cleanly against a genuinely fresh checkout: the same five patches were used to set up the parallel `cam6_2_022` branch from scratch, and all five applied without conflict. If `git apply` ever does report a conflict (e.g. against a different CAM tag with more divergent source), re-applying each change manually using §6 as the reference is the fallback. Note also that step 3b must run *before* step 4 -- `checkout_externals` refuses to fetch anything once it detects the source patches' modifications (see §7.4).
