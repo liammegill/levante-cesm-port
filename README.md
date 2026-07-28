@@ -14,4 +14,10 @@ independent efforts against frozen, unrelated upstream tags.
   `cime5.8.16`, CAM overridden to `cam6_2_020`. See
   `LEVANTE_PORT_LOG.md` on that branch for the full account.
 
+- [`cesm2.1.3-cime5.8.16-cam6_2_022`](../../tree/cesm2.1.3-cime5.8.16-cam6_2_022) —
+  Same CESM2/CAM6.2 replication, but built against `cam6_2_022` specifically
+  to match the exact CAM tag the Gettelman et al. (2021) paper cites in its
+  code-availability statement. See `CAM6_2_022_DELTA_LOG.md` on that branch
+  for what differs from the `cam6_2_020` setup.
+
 (add new entries here as new version ports are added)
