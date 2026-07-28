@@ -38,10 +38,10 @@ index 1e601b90e..c72b35e08 100644
 +</compiler>
  </config_compilers>
 diff --git a/config/cesm/machines/config_machines.xml b/config/cesm/machines/config_machines.xml
-index 8b859ca1f..368527bd4 100644
+index 8b859ca1f..455d97b1e 100644
 --- a/config/cesm/machines/config_machines.xml
 +++ b/config/cesm/machines/config_machines.xml
-@@ -2608,6 +2608,56 @@ This allows using a different mpirun command to launch unit tests
+@@ -2608,6 +2608,58 @@ This allows using a different mpirun command to launch unit tests
      </module_system>
    </machine>
  
@@ -81,6 +81,7 @@ index 8b859ca1f..368527bd4 100644
 +      <cmd_path lang="sh">module</cmd_path>
 +      <cmd_path lang="csh">module</cmd_path>
 +      <modules>
++        <command name="purge"/>
 +        <command name="load">python3/2023.01-gcc-11.2.0</command>
 +        <command name="load">intel-oneapi-compilers/2022.0.1-gcc-11.2.0</command>
 +        <command name="load">intel-oneapi-mkl/2022.0.1-gcc-11.2.0</command>
@@ -93,6 +94,7 @@ index 8b859ca1f..368527bd4 100644
 +    </module_system>
 +    <environment_variables>
 +      <env name="PERL5LIB">/work/bd1062/b309257/conda_envs/cesm-perl526/lib/site_perl/5.26.2/x86_64-linux-thread-multi:/work/bd1062/b309257/conda_envs/cesm-perl526/lib/site_perl/5.26.2</env>
++      <env name="LD_LIBRARY_PATH">/sw/spack-levante/intel-oneapi-mkl-2022.0.1-ttdktf/mkl/2022.0.1/lib/intel64:/sw/spack-levante/intel-oneapi-compilers-2022.0.1-an2cbq/compiler/2022.0.1/linux/compiler/lib/intel64_lin:/sw/spack-levante/openmpi-4.1.2-yfwe6t/lib:/sw/spack-levante/netcdf-c-4.8.1-2k3cmu/lib:/sw/spack-levante/netcdf-fortran-4.5.3-k6xq5g/lib:/sw/spack-levante/parallel-netcdf-1.12.2-mc24h4/lib</env>
 +    </environment_variables>
 +  </machine>
    <default_run_suffix>
