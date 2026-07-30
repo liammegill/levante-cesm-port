@@ -6,7 +6,7 @@
 
 This document covers the full path from zero to a successfully completed test simulation: machine porting, build, input-data acquisition, and runtime debugging. It supersedes the build-mechanics portions of the original `HANDOFF.md` — that document remains the reference for science background, CAM source review, and the still-open MERRA2/aircraft-emission data gap.
 
-Status at time of writing: case builds and runs cleanly (5-timestep smoke test, `HIST` compset, `f19_f19_mg17` resolution). The specified-dynamics/COVID-emissions science setup described in the paper is not yet implemented — see §12.
+Status at time of writing: case builds and runs cleanly (5-timestep smoke test, `HIST` compset, `f19_f19_mg17` resolution). The specified-dynamics/COVID-emissions science setup described in the paper is not yet implemented — see §12. (This has since progressed substantially on the `cam6_2_022` branch — soft nudging, aircraft emissions, and SSP2-4.5 forcing are now working together at f09 resolution; see `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md`.)
 
 ---
 
@@ -158,7 +158,11 @@ bug rather than an old, un-synced fix.
 Lesson: any time the live machine config is edited after a patch has
 already been exported and saved, the patch needs re-exporting (`git diff`
 in the live checkout, overwrite the saved `.patch` file) before it can be
-trusted as an accurate record.
+trusted as an accurate record. (This happened a second time with a
+stack-size `resource_limits` fix added for f09 resolution — see
+`CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md` §10 — which as of this writing
+has been synced to the `cam6_2_022` branch's patch but not yet to this
+branch's.)
 
 ## 4. Machine port: `config_batch.xml`
 
@@ -258,7 +262,7 @@ character(SHR_KIND_CL)  :: fldList   →   character(len=CL)       :: fldList
 
 ### 6.4 `components/clm/src/biogeochem/SatellitePhenologyMod.F90`, `components/clm/src/biogeophys/SoilMoistureStreamMod.F90`
 
-Same pattern, different kind (`SHR_KIND_CXX`, a genuine distinct 4096-character kind constant, not a typo for `CL`). Neither file imported it. Fixed by adding the import and using the local alias in both files:
+Same pattern, different kind (`SHR_KIND_CXX`, a distinct 4096-character kind constant, not a typo for `CL`). Neither file imported it. Fixed by adding the import and using the local alias in both files:
 ```fortran
 use shr_kind_mod    , only : CXX => shr_kind_CXX
 character(SHR_KIND_CXX)    :: fldList   →   character(len=CXX)        :: fldList
@@ -397,7 +401,7 @@ while read -r localfile; do
 done < unique_missing_files.txt
 ```
 
-### 8.3 Final input-data size is genuinely large, not further over-fetching
+### 8.3 Final input-data size is large, not further over-fetching
 
 Even with the targeted per-file fetch, total input data reached roughly 55 GB. The breakdown confirmed this is not further over-fetching: the specific named files required by this compset — `ozone_strataero` (stratospheric ozone/aerosol climatology, full 1850–2015 period at 5-day frequency, 70 vertical levels), `tracer_cnst` (constant-species vertical profiles, similar span/resolution), and the CMIP6 3D vertical emission fields — are each, individually, tens of gigabytes at this temporal/vertical resolution. This is inherent to the datasets these compset settings require, not an artifact of the fetch mechanism.
 
@@ -459,11 +463,11 @@ This same `init_interp` code path will need revisiting once the case moves to us
 
 ## 12. Still open
 
-1. MERRA2 nudging files and aircraft-emission forcing data are not part of the standard input-data set fetched in §8 and are not available from NCAR's public server — these need to come from the colleague directly, per the original `HANDOFF.md`.
-2. The contrail-cirrus SourceMods (`ssatcontrail.F90`, `aircraft_emit.F90`, `tracer_data.F90`, `physpkg.F90`, `horizontal_interpolate.F90`, already downloaded from the paper's Zenodo record) have not yet been placed into `SourceMods/src.cam/` or built.
-3. COVID emission scaling (`weekly_flight_fraction_2020all.nc`, already downloaded) is not yet wired into the namelist.
-4. The test case is the plain `HIST` compset — free-running, prescribed ocean/ice, full 1850–2017 historical SST forcing — not the specified-dynamics/MERRA2-nudged setup the paper actually uses.
-5. Resolution is at `f19_f19_mg17` (~2°); the paper uses `f09`-class (~1°), 32 levels.
+1. MERRA2 nudging files and aircraft-emission forcing data are not part of the standard input-data set fetched in §8 and are not available from NCAR's public server — these need to come from the colleague directly, per the original `HANDOFF.md`. (Resolved on the `cam6_2_022` branch — see `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md`.)
+2. The contrail-cirrus SourceMods (`ssatcontrail.F90`, `aircraft_emit.F90`, `tracer_data.F90`, `physpkg.F90`, `horizontal_interpolate.F90`, already downloaded from the paper's Zenodo record) have not yet been placed into `SourceMods/src.cam/` or built. (Done on the `cam6_2_022` branch.)
+3. COVID emission scaling (`weekly_flight_fraction_2020all.nc`, already downloaded) is not yet wired into the namelist. (Done on the `cam6_2_022` branch, and since extended with a real 2019 seasonal pattern — see `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md` §15-16.)
+4. The test case is the plain `HIST` compset — free-running, prescribed ocean/ice, full 1850–2017 historical SST forcing — not the specified-dynamics/MERRA2-nudged setup the paper actually uses. (The `%SDYN` compset was tried and dropped in favor of `nudging_nl` soft nudging on the same plain compset — see `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md` §8. SST forcing is still the historical climatology, not MERRA2-derived SST as the paper describes — still open.)
+5. Resolution is at `f19_f19_mg17` (~2°); the paper uses `f09`-class (~1°), 32 levels. (Moved to `f09_f09_mg17` on the `cam6_2_022` branch — see `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md` §9. This also surfaced a stack-overflow bug at the finer resolution, fixed there in §10, not yet synced to this branch's own `cime.patch`.)
 6. CISM was excluded, not fixed (§5.3). Its CMake/Intel-Fortran `FC`-detection issue remains unresolved if ice-sheet dynamics are needed in the future.
 7. CLM's `init_interp` failure (§11) was avoided via cold start, not root-caused. Any future case using a resolution-mismatched or otherwise-interpolated `finidat` file may hit the same failure.
 8. The colleague's actual CAM/CIME tag and machine remain unconfirmed. Reconciling against this log once available is a priority, given how version-sensitive this entire port proved to be.
@@ -536,4 +540,4 @@ module load subversion
 ./case.submit
 ```
 
-`git apply` in step 4 has been confirmed to work cleanly against a genuinely fresh checkout: the same five patches were used to set up the parallel `cam6_2_022` branch from scratch, and all five applied without conflict. If `git apply` ever does report a conflict (e.g. against a different CAM tag with more divergent source), re-applying each change manually using §6 as the reference is the fallback. Note also that step 3b must run *before* step 4 -- `checkout_externals` refuses to fetch anything once it detects the source patches' modifications (see §7.4).
+`git apply` in step 4 has been confirmed to work cleanly against a fresh checkout: the same five patches were used to set up the parallel `cam6_2_022` branch from scratch, and all five applied without conflict. If `git apply` ever does report a conflict (e.g. against a different CAM tag with more divergent source), re-applying each change manually using §6 as the reference is the fallback. Note also that step 3b must run *before* step 4 -- `checkout_externals` refuses to fetch anything once it detects the source patches' modifications (see §7.4).
