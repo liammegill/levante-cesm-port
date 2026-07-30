@@ -28,8 +28,8 @@ directly (`git diff`) showed:
 - `cam6_2_021`'s own test log (in `doc/ChangeLog`) explicitly reports
   non-bit-for-bit differences against the prior baseline across a range of
   compsets, including general historical-forcing configurations similar to
-  this project's — confirming the aerosol/convective change genuinely alters
-  simulated answers by default, not just adding an opt-in switch.
+  this project's — confirming the aerosol/convective change alters simulated
+  answers by default, not just adding an opt-in switch.
 - None of the five contrail-specific SourceMods files
   (`aircraft_emit.F90`, `ssatcontrail.F90`, `tracer_data.F90`, `physpkg.F90`,
   `horizontal_interpolate.F90`) are tracked and hence are not in the diff.
@@ -129,4 +129,6 @@ timestamp — the same validation standard applied to the `cam6_2_020` branch.
 
 The switch from CMIP6 (1750-2015) to SSP2-4.5 (until 2100) was completed and
 the contrail SourceMods have been successfully added to the run. This process
-is documented in `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md`.
+is documented in `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md`, along with a
+stack-overflow fix at f09 resolution (`patches/cime.patch` on this branch)
+that should also be synced to the `cam6_2_020` branch's patch — not yet done.
