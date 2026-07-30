@@ -1,21 +1,18 @@
 # Contrail-Cirrus SourceMods Integration Log
 
-Covers integrating the Gettelman et al. (2021) contrail-cirrus SourceMods
-into a working case, wiring up the converted GAIA aircraft-emission
-inventory and MERRA2 nudging, and switching to the Specified-Dynamics
-compset. Done on the `cam6_2_022` branch (case `levante_sd_022`), building
-on the already-validated port covered by `LEVANTE_PORT_LOG.md` and
-`CAM6_2_022_DELTA_LOG.md`.
+Note: this document was written with AI assistance.
 
-Status at time of writing: build succeeds; the run reaches CAM's chemistry
-initialization before failing on a genuine input-data content gap (§5).
-Not yet a completed run.
+Covers integrating the [Gettelman et al. (2021)](https://doi.org/10.5194/acp-21-9405-2021)
+contrail-cirrus SourceMods into a working case, including MERRA2 nudging and
+the use of a converted OpenAirClim-compatible aircraft emission inventory.
+This is done on the `cam6_2_022` branch, building on the already-validated port
+covered by `LEVANTE_PORT_LOG.md` and `CAM6_2_022_DELTA_LOG.md`.
 
 ---
 
 ## 1. SourceMods placement
 
-The five modified files (`aircraft_emit.F90`, `ssatcontrail.F90`,
+The five files published by Gettelman et al. (2021) on [Zenodo](https://doi.org/10.5281/zenodo.4584077) (`aircraft_emit.F90`, `ssatcontrail.F90`,
 `tracer_data.F90`, `physpkg.F90`, `horizontal_interpolate.F90`) were copied
 directly into the case's `SourceMods/src.cam/` directory. CIME picks these
 up automatically at build time, replacing the corresponding stock files
@@ -24,20 +21,13 @@ for this case only.
 ## 2. `ac_factor` hardcoded path and line-length fix
 
 `aircraft_emit_init` (in `aircraft_emit.F90`) reads 53 weekly scaling
-factors from a hardcoded path on Andrew Gettelman's own NCAR home
-directory (`/glade/u/home/andrew/cesm_ch/covid_air/ac_factor_2020all.dat`),
-which cannot exist on Levante. Two issues needed fixing in the SourceMods
-copy:
+factors from a hardcoded path on an NCAR home directory. Two issues needed fixing in the SourceMods copy:
 
 - The path itself, repointed to a file generated locally (see §3).
 - The resulting `open(...)` line came to 133 characters — one over
   free-form Fortran's 132-character limit — and needed splitting using
-  proper string-continuation syntax (`&` at the end of one line, `&` at
-  the start of the next):
-  ```fortran
-  open(101,file='/work/bd1062/b309257/cam6-contrail-cirrus/inputdata/atm/cam/chem/ac_factor/&
-       &ac_factor_2020all.dat',form='formatted')
-  ```
+  proper string-continuation syntax.
+
 
 ## 3. Generating the `ac_factor` file: a 52-vs-53-week mismatch
 
@@ -46,7 +36,7 @@ copy:
 (`do m=1,53 read(101,*) ac_factor(m)`). Tracing `ssatcontrail.F90`'s
 day-to-week-index formula for late December
 (`(335+day-1)/7+1` under integer division) shows days 30–31 of December
-genuinely index into slot 53 — 52 weeks × 7 days is 364, one or two days
+index into slot 53 — 52 weeks × 7 days is 364, one or two days
 short of a full year. Fix: generate a 53rd value by duplicating week 52's
 value (the most defensible choice for the final day or two of the year,
 absent any other information), then write all 53 values as plain
@@ -55,17 +45,17 @@ whitespace-separated numbers to a new file. The resulting sequence
 lockdown weeks, recovering to ~0.87 by year end) matches the paper's own
 qualitative description of the 2020 flight-reduction pattern.
 
-## 4. Two genuine interface mismatches between Gettelman's files and this CAM tag
+## 4. Two interface mismatches between Gettelman et al.'s files and this CAM tag
 
 Since `physpkg.F90` in SourceMods is a *complete file replacement* (not a
-patch), it carries along Gettelman's entire file exactly as it existed
-when he made his edits — including any surrounding code he didn't touch.
-Where the *stock* (untouched) CAM interfaces have since evolved, his
+patch), it carries along Gettelman et al.'s entire file exactly as it existed
+when the edits were made — including any surrounding code that wasn't touched.
+Where the *stock* (untouched) CAM interfaces have since evolved, the
 carried-along calls to them no longer match. Both mismatches were found by
 diffing the stock `physpkg.F90` (still present, unmodified, in the main
 CAM checkout) against the SourceMods copy — the principle applied
-throughout: since Gettelman's files aren't version-tracked and the stock
-CAM checkout is, fixes always adapt his files to the current stock
+throughout: since Gettelman et al.'s files aren't version-tracked and the stock
+CAM checkout is, fixes always adapt the downloaded files to the current stock
 interfaces, never the reverse.
 
 ### 4.1 `microp_aero_init()` called with no arguments
@@ -75,7 +65,7 @@ Stock (current) interface, confirmed directly in
 ```fortran
 subroutine microp_aero_init(pbuf2d)
 ```
-Gettelman's `physpkg.F90` calls it with zero arguments
+Gettelman et al.'s `physpkg.F90` calls it with zero arguments
 (`call microp_aero_init()`). `pbuf2d` is already a valid local variable in
 the enclosing subroutine (`phys_init`). Fix: add the argument at the call
 site.
@@ -131,7 +121,7 @@ file. Since the paper explicitly states "the standard 32 levels (to
 ./case.build --clean-all
 ```
 (`-nlev` is a compile-time CAM configure option — CPP-defined dimension
-parameters like `PLEV` are baked into compiled objects, so this genuinely
+parameters like `PLEV` are baked into compiled objects, so this
 needs a full clean rebuild, not just a namelist change; CIME's own
 `xmlchange` output correctly flagged this.) This strongly suggests the
 paper's own case setup included an explicit `-nlev 32` override of its
@@ -224,7 +214,7 @@ CFCs, etc.).
 
 **First failure:** the default LBC file
 (`LBC_1750-2015_CMIP6_GlobAnnAvg_c180926.nc`) only covers through 2015 —
-`RUN_STARTDATE=2019-01-01` is genuinely outside its time axis
+`RUN_STARTDATE=2019-01-01` is outside its time axis
 (`flbc_inti: time out of bounds`). This is exactly the SSP2-4.5
 emissions-coverage gap flagged as an open item earlier in the port
 (§12 of `LEVANTE_PORT_LOG.md`), now actually encountered.
@@ -304,7 +294,7 @@ CAM's own dynamical core runs completely normally and an additional
 relaxation term is *added* to its own tendency, pulling gently toward
 MERRA2 rather than replacing the state outright. This distinction matters
 scientifically here specifically because the contrail scheme's premise is
-that injected aircraft water vapor genuinely interacts with the model's own
+that injected aircraft water vapor interacts with the model's own
 humidity/temperature/cloud fields -- under hard forcing those fields could
 be partially overwritten before the model's own physics response to the
 injected water vapor has a chance to matter.
@@ -332,7 +322,7 @@ fetched at f19 (topo, domain, SST, initial condition, CMIP6 emissions,
 CLM surface data, etc.) -- all via the same targeted per-file `svn export`
 approach as the original f19 fetch, no new gotchas there.
 
-## 10. A genuine stack-overflow bug, found by isolating stock CAM
+## 10. A stack-overflow bug, found by isolating stock CAM
 
 Switching to f09 immediately produced a segfault (signal 11) deep in
 `mo_drydep.F90` (dry deposition velocity / land-use-fraction mapping),
@@ -356,7 +346,7 @@ per-process stack limit. At f19 the same arrays total under 3 MB, safely
 within the limit, which is exactly why this was never seen before
 switching resolutions. A raw segfault (not a clean "subscript out of
 bounds" message) even under `DEBUG=TRUE`/bounds-checking is itself a good
-diagnostic signature of a stack-overflow rather than a genuine indexing
+diagnostic signature of a stack-overflow rather than a indexing
 bug -- bounds checking only catches language-level array violations, not
 running out of stack space for a correctly-indexed array.
 
@@ -399,7 +389,7 @@ anthropogenic/biomass-burning species-sector files (SO2, DMS, bc_a4,
 pom_a4, so4_a1/a2, num_a1/a2/a4, SOAGx1.5, across anthro/bb/anthro-ene/
 anthro-ag-ship/anthro-res sectors) were swapped for their
 `emissions_ssp245/` equivalents -- confirmed via direct inspection (not
-assumption) to be genuinely bit-identical to the historical data through
+assumption) to be bit-identical to the historical data through
 2015, concatenated with the SSP2-4.5 projection through 2101 (verified via
 the SSP245 file's own embedded processing-history attribute, which
 explicitly names the historical file it was built from). Same units
@@ -430,7 +420,7 @@ was **checked directly and found to be half wrong**:
   **These 5 entries were restored to their original, untouched files** --
   they never needed touching in the first place, and the earlier "drop"
   decision was a mistake caught by verifying rather than assuming.
-- **Biogenic (`SOAGx1.5_biogenic_surface`) genuinely is capped at 2015**
+- **Biogenic (`SOAGx1.5_biogenic_surface`) is capped at 2015**
   (confirmed: `date` variable spans 1750-01-16 to 2015-12-16 exactly,
   3192 monthly entries). No SSP245-consistent extended replacement was
   found after checking the `emissions_ssp245/` directory, the dedicated
@@ -451,7 +441,7 @@ was **checked directly and found to be half wrong**:
 ### 11.4 Stratospheric ozone, halons, and CH4-oxidation water vapor
 Three more files, found only via runtime crashes (not the original file
 audit -- see §11.5), all following the identical pattern (default file
-capped at 2015, genuine SSP2-4.5-consistent replacement existing in the
+capped at 2015, SSP2-4.5-consistent replacement existing in the
 same source directory):
 - `prescribed_ozone_file`/`prescribed_strataero_file` (same file used for
   both): swapped `ozone_strataero_WACCM_L70_zm5day_18500101-20150103_
@@ -473,7 +463,7 @@ same source directory):
 A comprehensive script-based audit of every file path in `atm_in` (53
 unique full-path entries, checked programmatically via `netCDF4` for each
 one's actual `date`/`time` coverage against 2019) was run partway through
-this process and was genuinely useful -- but **initially missed
+this process and was useful -- but **initially missed
 `tracer_cnst_file`, `prescribed_ozone_file`, and `prescribed_strataero_
 file` entirely**, because these variables store only a **bare filename**,
 with the directory given separately via a companion `*_datapath`
@@ -495,11 +485,11 @@ anything with no `time` dimension, anything with a `time` dimension but no
 which is read once as a starting snapshot and never needs ongoing
 coverage regardless of its own internal date stamp.
 
-## 12. Two genuine code bugs found and fixed in `tracer_data.F90`/`aircraft_emit.F90`
+## 12. Two code bugs found and fixed in `tracer_data.F90`/`aircraft_emit.F90`
 
 With every input file now covering 2019, the run advanced much further but
 hit two more issues, both **inside the aircraft-emission SourceMods
-themselves** (not the input data) -- both confirmed as genuine bugs (or at
+themselves** (not the input data) -- both confirmed as bugs (or at
 least assumptions that don't generalize), not further data problems.
 
 ### 12.1 `aircraft_emit.F90`: `data_cycle_yr` hardcoded to 0
@@ -532,7 +522,7 @@ endif
 -- only exempts `'CYCLICAL'` type, rejecting `'CYCLICAL_LIST'` outright.
 But the code's own *usage* of `cyc_yr`, just a few lines further down, is
 guarded by `if (file%cyclical .or. file%cyclical_list)` -- treating both
-types identically. This is a genuine inconsistency in stock CAM's own
+types identically. This is a inconsistency in stock CAM's own
 validation logic (this file, `tracer_data.F90`, is one of Gettelman's five
 full-file-replacement SourceMods copies, but this specific check appears
 to be untouched, carried-along stock code, not something he modified) --
@@ -549,7 +539,7 @@ endif
 With both fixes in place, `levante_nudge_022_f09` completed a full
 5-timestep run cleanly (`case.run` + `case.st_archive`, both `COMPLETED`
 exit `0:0`, full restart-file set present for every component at
-`2019-01-01-09000`) -- the first genuinely complete, working run of the
+`2019-01-01-09000`) -- the first complete, working run of the
 integrated setup (SourceMods + soft nudging + aircraft emissions + SSP2-4.5
 forcing, at f09).
 
@@ -608,7 +598,7 @@ ac_SLANT_DIST = ac_SLANT_DIST*curr_factor  ! 1.88 removed, same reason as ac_H2O
 
 ---
 
-# Session 3: A genuine 2019 seasonal pattern for `ac_factor`, and a leap-year bug fix
+# Session 3: A 2019 seasonal pattern for `ac_factor`, and a leap-year bug fix
 
 ## 15. `ac_factor` extended to a real 2019 seasonal pattern (not a flat baseline)
 
@@ -620,14 +610,14 @@ non-2020 year, on the reasoning that the paper's own baseline scenario is
 a flat annual-average rate with no built-in seasonal structure. This was
 reconsidered given the user's own OpenSky-derived 2019 weekly flight-count
 data and the paper's own Figure 1(c) (monthly average flights per year,
-2016-2019, plus a multi-year average line) showing genuine, non-trivial
+2016-2019, plus a multi-year average line) showing non-trivial
 seasonal variation the paper is clearly aware of — a flat 1.0 would
 discard real seasonal structure (more traffic in northern-hemisphere
 summer, less in winter) that a properly faithful reproduction should
 retain.
 
 **Data:** `ac_factor` extended from 53 to **106 entries** — weeks 1-53 now
-hold a genuine 2019 seasonal pattern, weeks 54-106 the original 2020
+hold a 2019 seasonal pattern, weeks 54-106 the original 2020
 COVID-affected pattern, unchanged. The 2019 half was built from real daily
 OpenSky flight-count data (365 days, user-supplied) bucketed into the
 same simple sequential 7-day windows the code already uses (day 1-7 = week

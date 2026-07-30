@@ -1,29 +1,30 @@
 # cam6_2_022 Branch — Delta Log
 
-This branch is a parallel setup to `cesm2.1.3-cime5.8.16-cam6_2_020`, built to
-match the CAM tag the Gettelman et al. (2021) paper's own "Code and data
-availability" section explicitly cites: `https://github.com/ESCOMP/CAM/tree/cam6_2_022`.
-The full account of the machine port, build process, input-data acquisition,
-and runtime debugging is on the `cesm2.1.3-cime5.8.16-cam6_2_020` branch's
-`LEVANTE_PORT_LOG.md` — everything there applies equally here except where
-noted below. This document covers only what's different.
+Note: this document was written with AI assistance.
+
+This branch is a parallel setup to `cesm2.1.3-cime5.8.16-cam6_2_020`, built to 
+match the CAM tag `cam6_2_022`. This tag was used by
+[Gettelman et al. (2021)](https://doi.org/10.5194/acp-21-9405-2021) and is
+available [here](https://github.com/ESCOMP/CAM/tree/cam6_2_022). The full
+account of the machine port, build process, input-data acquisition and runtime
+debugging is on the `cesm2.1.3-cime5.8.16-cam6_2_020` branch's
+`LEVANTE_PORT_LOG.md`. Everything there applies equally here except where noted 
+below.
 
 ## Why this branch exists
 
-The original setup used `cam6_2_020` (an intermediate CAM development
-snapshot, chosen because it was verifiable against the paper's Zenodo
-record's file timestamps). Comparing `cam6_2_020` against `cam6_2_022`
-directly (`git log`/`git diff` between the two tags, both reachable in the
-same local CAM checkout) showed:
+The original setup used `cam6_2_020` because this was mentioned in Gettelman et
+al.'s data on Zenodo. However, the paper itself mentions using the `cam6_2_022`
+setup, thus leading to this branch. Comparing `cam6_2_020` against `cam6_2_022`
+directly (`git diff`) showed:
 
 - `cam6_2_022` itself is a pure externals/build update (repinning component
   tags, a build-config path fix for relocated slab-ocean model files) — no
   physics change in this tag alone.
-- The tag in between, `cam6_2_021`, contains the real change: a substantial
-  rework of aerosol convective transport and wet removal
-  (`modal_aero_convproc.F90`, plus new namelist switches), a calendar bug fix
-  specific to the NUOPC/ESMF driver (not applicable to this MCT-based build),
-  and improved external-forcing file-checking.
+- The tag in between, `cam6_2_021`, contains a substantial rework of aerosol
+  convective transport and wet removal (`modal_aero_convproc.F90`, plus new
+  namelist switches), a calendar bug fix specific to the NUOPC/ESMF driver (not
+  applicable to this MCT-based build) and improved external-forcing file-checking.
 - `cam6_2_021`'s own test log (in `doc/ChangeLog`) explicitly reports
   non-bit-for-bit differences against the prior baseline across a range of
   compsets, including general historical-forcing configurations similar to
@@ -31,13 +32,11 @@ same local CAM checkout) showed:
   simulated answers by default, not just adding an opt-in switch.
 - None of the five contrail-specific SourceMods files
   (`aircraft_emit.F90`, `ssatcontrail.F90`, `tracer_data.F90`, `physpkg.F90`,
-  `horizontal_interpolate.F90`) appear in the `cam6_2_020`→`cam6_2_022` diff
-  at all — the contrail scheme itself is untouched between the two tags.
+  `horizontal_interpolate.F90`) are tracked and hence are not in the diff.
 
-Given the paper explicitly cites `cam6_2_022`, and the difference is real
-(confirmed non-BFB) rather than cosmetic, this branch exists to match the
-paper's stated code precisely, while the `cam6_2_020` branch remains intact
-as the already-validated original setup.
+Given the paper explicitly cites `cam6_2_022`, and the difference is not just
+cosmetic, this branch exists to match the paper's stated setup exactly, while
+the `cam6_2_020` branch remains intact as the validated original setup.
 
 ## What's identical to the cam6_2_020 setup
 
@@ -100,8 +99,7 @@ Two further things worth knowing about this step:
    `cam6_2_020` setup too** — the `clubb`/`fates` source is present there,
    meaning this same `-e ... -o ...` step (or an equivalent) must have been
    done at some point, but it wasn't captured in that branch's port log at
-   the time. Worth treating the `cam6_2_020` branch's reproduction runbook
-   as incomplete on this point until it's updated.
+   the time.
 
 ## A process lesson from this branch's setup: keep patches in sync with the live config
 
@@ -128,3 +126,7 @@ Built successfully (`case.build`) and completed a 5-timestep smoke test
 (`case.run` + `case.st_archive`, both `COMPLETED`/exit `0:0`), with a full,
 consistent restart-file set for every component at the expected final
 timestamp — the same validation standard applied to the `cam6_2_020` branch.
+
+The switch from CMIP6 (1750-2015) to SSP2-4.5 (until 2100) was completed and
+the contrail SourceMods have been successfully added to the run. This process
+is documented in `CONTRAIL_SOURCEMODS_INTEGRATION_LOG.md`.
