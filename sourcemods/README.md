@@ -7,14 +7,20 @@ detail on each):
 
 - `aircraft_emit.F90` — ac_factor path fixed (§7 of the integration log),
   a Fortran line-length fix, the missing `cam_in` argument added to fix an
-  interface mismatch with current CAM (§4.2), and `data_cycle_yr`
-  hardcoded to 2019 instead of 0 (§12.1 — flagged there as a temporary
-  fix; should become a namelist variable, see the integration log's
-  still-open items).
+  interface mismatch with current CAM (§4.2), `data_cycle_yr` hardcoded to
+  2019 instead of 0 (§12.1 — flagged there as a temporary fix; should
+  become a namelist variable, see the integration log's still-open
+  items), and `ac_factor` extended from 53 to 106 entries (§15 — see
+  `data/ac_factor_2019_2020.dat`).
 - `tracer_data.F90` — the `date`/`datesec` fix, and the `CYCLICAL_LIST`
   validation bug fix (§12.2).
 - `ssatcontrail.F90` — the 1.88 (2006→2020 traffic growth) multiplier
-  removed, since the GAIA 2019 inventory is already present-day (§13).
+  removed, since the GAIA 2019 inventory is already present-day (§13); the
+  hardcoded per-month day-offset chain (leap-year-specific, silently wrong
+  for any non-leap year) replaced with `get_curr_calday()`, and the
+  week-index calculation extended to select between a real 2019 seasonal
+  pattern and the original 2020 COVID-affected pattern depending on
+  simulated year (§15).
 - `physpkg.F90` — the `microp_aero_init`/`phys_init` interface-mismatch
   fixes (§4.1, §4.2).
 - `horizontal_interpolate.F90` — unmodified, included for completeness

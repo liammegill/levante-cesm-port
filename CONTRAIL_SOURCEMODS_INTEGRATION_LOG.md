@@ -605,3 +605,86 @@ ac_SLANT_DIST = ac_SLANT_DIST*curr_factor  ! 1.88 removed, same reason as ac_H2O
    crash-driven discovery -- it's slower up front but would have caught
    at least 3 of the 5 fixes in §11 in one pass rather than five separate
    rounds of build-submit-diagnose.
+
+---
+
+# Session 3: A genuine 2019 seasonal pattern for `ac_factor`, and a leap-year bug fix
+
+## 15. `ac_factor` extended to a real 2019 seasonal pattern (not a flat baseline)
+
+Following up on the still-open item from Session 2 (§14, item 2): whether
+`ac_factor` — originally a 53-entry, 2020-only weekly COVID-affected
+flight fraction — should apply at all to 2019 (which the array predates
+entirely). Initially considered simply forcing `curr_factor = 1.0` for any
+non-2020 year, on the reasoning that the paper's own baseline scenario is
+a flat annual-average rate with no built-in seasonal structure. This was
+reconsidered given the user's own OpenSky-derived 2019 weekly flight-count
+data and the paper's own Figure 1(c) (monthly average flights per year,
+2016-2019, plus a multi-year average line) showing genuine, non-trivial
+seasonal variation the paper is clearly aware of — a flat 1.0 would
+discard real seasonal structure (more traffic in northern-hemisphere
+summer, less in winter) that a properly faithful reproduction should
+retain.
+
+**Data:** `ac_factor` extended from 53 to **106 entries** — weeks 1-53 now
+hold a genuine 2019 seasonal pattern, weeks 54-106 the original 2020
+COVID-affected pattern, unchanged. The 2019 half was built from real daily
+OpenSky flight-count data (365 days, user-supplied) bucketed into the
+same simple sequential 7-day windows the code already uses (day 1-7 = week
+1, ..., with the final, 53rd bucket holding only day 365 alone — the same
+irregular-tail pattern as the original 2020 array's own 53rd entry), each
+week's average count then normalized by 2019's own overall daily average
+(so values fluctuate around 1.0, the same convention the 2020 array uses
+relative to its own implied pre-COVID baseline). Result: a smooth,
+sensible curve dipping to ~0.78-0.84 in Jan-Feb, rising to ~1.05-1.15
+across Jun-Sep peak summer travel, and tapering back toward ~1.0 by
+year-end — with no discontinuity at the year boundary (week 53 ends at
+0.986, week 54 begins at 0.977). Saved as `data/ac_factor_2019_2020.dat`
+in this repository.
+
+## 16. A second, independent leap-year bug found while making this change
+
+While reviewing the existing per-month day-offset chain in
+`ssatcontrail.F90` (`ac_factor((335+day-1)/7+1)` for December, etc.) in
+order to add the year-based array offset, the offsets themselves
+(31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335) turned out to only be
+internally consistent for a **leap year**: the jump from January's
+implicit offset (31) to March's (60) only works if February contributed
+29 days (31+29=60) — true for 2020 (the year this code was originally
+written for) but not for 2019 or any other non-leap year, where every
+date from March onward would have been silently misaligned by one day had
+these offsets been reused as-is for a second, non-leap year.
+
+**Fix:** rather than add a second, year-conditional offset table (doubling
+the fragility), the entire hardcoded per-month chain was replaced with
+CAM's own `get_curr_calday()` (`time_manager.F90`), which returns the
+correct day-of-year via ESMF's calendar-aware calculation, handling both
+leap and non-leap years correctly with no hardcoding at all:
+```fortran
+calday = get_curr_calday()
+week_idx = int((calday - 1.0_r8) / 7.0_r8) + 1
+if( yr.eq.2020 ) week_idx = week_idx + 53
+curr_factor = ac_factor(week_idx)
+```
+`aircraft_emit.F90`'s `ac_factor` declaration and file-reading loop were
+updated in step (53 → 106 entries, new filename
+`ac_factor_2019_2020.dat`).
+
+Rebuilt and resubmitted: `case.run` + `case.st_archive` both `COMPLETED`
+exit `0:0`, full restart set present at `2019-01-01-09000`, as with every
+prior successful validation this project.
+
+## 17. Updated still-open items
+
+- Item 2 from Session 2's §14 (whether `ac_factor` needs 2019 handling) is
+  now resolved by §15-16 above.
+- Item 1 from Session 2's §14 (`aircraft_cycle_yr` should be a namelist
+  variable, not hardcoded) still applies, and now additionally covers the
+  fact that `curr_factor`'s year check (`if (yr.eq.2020)`) is itself
+  hardcoded to the specific years this study covers — a future run
+  covering different years would need both this and `data_cycle_yr`
+  updated together, ideally via the same namelist-driven mechanism.
+- Everything else listed in Session 2's §14 remains open (biogenic
+  emissions gap, syncing the f09 stack-size fix to the `cam6_2_020`
+  branch, the full 2019-2020 MERRA2 transfer, the nudging coefficient
+  verification, the ensemble/perturbation setup).

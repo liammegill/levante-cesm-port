@@ -72,7 +72,7 @@ module aircraft_emit
   character(len=256) :: spc_flist(N_AERO),spc_fname(N_AERO)
   integer :: dist(N_AERO)
 
-  real(r8), public :: ac_factor(53)
+  real(r8), public :: ac_factor(106)  ! 53 weeks x 2 years (2019 then 2020)
 
 contains
 
@@ -266,8 +266,8 @@ contains
 
 ! read ac_factor here
    open(101,file='/work/bd1062/b309257/cam6-contrail-cirrus/inputdata/atm/cam/chem/ac_factor/&
-        &ac_factor_2020all.dat',form='formatted')
-   do m=1,53
+        &ac_factor_2019_2020.dat',form='formatted')
+   do m=1,106
       read(101,*) ac_factor(m)
    end do 
 !

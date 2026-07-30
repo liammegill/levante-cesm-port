@@ -14,7 +14,7 @@ module ssatcontrail
     use aircraft_emit,    only: aircraft_cnt, spc_name_list, ac_factor
     use geopotential,     only: geopotential_dse
     use phys_grid, only    : get_wght_all_p
-    use time_manager,       only: get_curr_date
+    use time_manager,       only: get_curr_date, get_curr_calday
 
     implicit none
     private
@@ -67,8 +67,8 @@ contains
     integer :: itype
     logical :: lq(pcnst)
 
-    integer :: yr, mon, day, ncsec
-    real(r8) :: curr_factor
+    integer :: yr, mon, day, ncsec, week_idx
+    real(r8) :: curr_factor, calday
 
 !    ICIWC = ICIWC0/rhodair
 
@@ -88,32 +88,17 @@ contains
     if(.not. has_aircraft_H2O)  return
 
 ! get current factor
+! ac_factor now holds 106 weekly values: weeks 1-53 = 2019 (real seasonal
+! variation from OpenSky flight counts, normalised to 2019's own average),
+! weeks 54-106 = 2020 (COVID-affected, from Gettelman's original weekly
+! flight-fraction data).
     call get_curr_date(yr, mon, day, ncsec)
-    if( mon.ge.12 ) then
-        curr_factor = ac_factor((335+day-1)/7+1)
-    elseif( mon.ge.11 ) then
-        curr_factor = ac_factor((305+day-1)/7+1)
-    elseif( mon.ge.10 ) then
-        curr_factor = ac_factor((274+day-1)/7+1)
-    elseif( mon.ge.9  ) then
-        curr_factor = ac_factor((244+day-1)/7+1)
-    elseif( mon.ge.8  ) then
-        curr_factor = ac_factor((213+day-1)/7+1)
-    elseif( mon.ge.7  ) then
-        curr_factor = ac_factor((182+day-1)/7+1)
-    elseif( mon.ge.6  ) then
-        curr_factor = ac_factor((152+day-1)/7+1)
-    elseif( mon.ge.5  ) then
-        curr_factor = ac_factor((121+day-1)/7+1)
-    elseif( mon.ge.4  ) then
-        curr_factor = ac_factor((91+day-1)/7+1)
-    elseif( mon.ge.3  ) then
-        curr_factor = ac_factor((60+day-1)/7+1)
-    elseif( mon.ge.2 ) then
-        curr_factor = ac_factor((31+day-1)/7+1)
-    else
-        curr_factor = ac_factor((day-1)/7+1)
-    endif
+    calday = get_curr_calday()
+    week_idx = int((calday - 1.0_r8) / 7.0_r8) + 1
+    if( yr.eq.2020 ) week_idx = week_idx + 53
+    curr_factor = ac_factor(week_idx)
+
+
 !    write(*,*) 'ac_factor = ', mon, day, curr_factor
 
     particle_mass = 4._r8/3._r8*pi*rhoi*radius**3   ! mass of ice particle
