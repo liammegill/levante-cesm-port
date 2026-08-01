@@ -710,3 +710,201 @@ still-open list (§14/§17) — all namelist-architecture follow-up work for
   (optionally) `EI_H2O` — discussed in §20, not implemented.
 - Two properly-configured (not throwaway) test cases for an April 2019
   vs. April 2020 comparison — planned, not yet built.
+
+---
+
+# Session 5: Ensemble Setup, Scaling, and a January Sanity Check
+
+## 22. Figure 2's baseline: three ensembles, five differences, no non-nudged case
+
+Confirmed from the paper's own text (§2.3), not inferred. Three ensembles:
+**full air** (2020-equivalent traffic, no COVID), **no air** (zero aviation
+water vapor), **COVID** (actual 2020 traffic, restarted from full air on
+1 January 2020). Every Figure 2 line is one ensemble mean minus another:
+`full air − no air` (orange: 2020 met; green: 2019 met) isolates aviation's
+effect; `COVID − full air` (blue) isolates COVID specifically. Solid lines
+= wind-only nudging (the paper's primary method). Dashed lines
+(red/purple) = wind+temperature nudging, run as **only two** additional
+ensembles ("full air T nudge", "COVID T nudge") — a sensitivity test, not
+a second full set. No line in Figure 2 uses zero nudging.
+
+For this project's goal (matching Figures 3-6, both `full air − no air`
+comparisons using the paper's standard wind-only nudging): only the
+three-ensemble, wind-only setup is needed. No temperature-nudged runs
+required.
+
+## 23. Ensemble mechanism: `NINST` + `pertlim`, both confirmed working
+
+CIME's multi-instance capability (`NINST_<COMPONENT>`) and CAM's
+`pertlim` namelist variable (`cam_initfiles_nl`, "Perturb the initial
+conditions for temperature randomly by up to the given amount") together
+implement the paper's 10-member, small-temperature-perturbation ensemble
+— no custom code needed.
+
+Setting `NINST_ATM=NINST_LND=NINST_ICE=NINST_OCN=NINST_ROF=10` (all
+prognostic components must match) and running `case.setup` auto-creates
+per-instance namelist files (`user_nl_cam_0001` ... `_0010`, one per
+component), each starting as a copy of the existing shared `user_nl_cam`
+— nothing already configured is lost. `pertlim` is CAM-specific; no
+equivalent exists (or is needed) for CLM/CICE/DOCN/MOSART, since a single
+perturbed atmospheric initial state cascades into divergent land/ice/
+river states as the coupled system evolves.
+
+**`pertlim`'s random seed is deterministic, not instance-specific**
+(`dynamics/fv/dyn_comp.F90`: `rndm_seed = i + (j-1)*nglon`, based purely
+on global column index). Identical `pertlim` across all 10 instances
+would produce bit-for-bit identical runs — zero ensemble spread. Fix:
+give each instance a distinct `pertlim` value (`1.01e-10` ... `1.10e-10`
+used here), all on the same order of magnitude as the paper's stated
+~1e-10 K. The random *pattern* is shared across instances; only the
+*scale* differs — sufficient to seed genuinely diverging trajectories
+once the model's chaotic dynamics run forward, confirmed directly:
+restart-file `T` differed between instance 1 and instance 10 by up to
+4.8 K after 5 timesteps (mean diff ~0.008 K; large max/small mean is the
+expected signature of localized chaotic growth, not a red flag).
+
+The deterministic, grid-location-only seeding is deliberate, not an
+oversight: it keeps runs exactly reproducible regardless of task count
+(needed for debugging, automated testing, and cross-run comparison) and
+independent of MPI decomposition (seed depends on global column index,
+not local/rank-based indexing, so results don't change with how the
+domain is split across tasks).
+
+## 24. Namelist config is read fresh at every job start, restart or not
+
+A CESM restart starts a **new executable process** for every job
+submission. Only prognostic model state (T, Q, winds, surface fields —
+what the restart file actually stores) carries over; everything
+namelist-driven (nudging settings, aircraft emissions config, `ac_factor`)
+is re-read from that job's own `atm_in` every time, since `phys_init`
+(and `aircraft_emit_init` within it) runs from scratch on every
+submission. Practical consequence: switching `ac_factor` files (or any
+other namelist setting) at a restart boundary works correctly without
+needing the namelist-configurable-path refactor discussed previously —
+it just requires a rebuild (different hardcoded path) at that point
+rather than a `user_nl_cam` edit. Refactor deferred: `physpkg.F90` (and
+likely the rest of the SourceMods) will need re-diffing against stock
+CAM again for any future CESM/CAM version port anyway (as already
+happened once, `cam6_2_020`→`cam6_2_022`), making a refactor now low
+value relative to redoing it properly as part of that future work.
+
+## 25. Three-case design: full air, COVID, no air
+
+- **full air** (non-COVID): new `ac_factor_full_air.dat` — the 2019
+  seasonal pattern (§15) duplicated into both halves of the 106-entry
+  array, representing the best available proxy for "2020 traffic absent
+  COVID" (no genuine non-COVID 2020 data exists). Confirmed length still
+  correct despite 2020 being a leap year: `week_idx = int(calday/7)+1`
+  caps at 53 for both 365-day (2019) and 366-day (2020) years under this
+  formula — the extra leap day just makes week 53 span two calendar days
+  instead of one, the same class of tail-end approximation as the
+  original week-53 padding decision (§3).
+- **COVID**: existing `ac_factor_2019_2020.dat`, unchanged. Identical to
+  full air for all of 2019 by construction (both files' first 53 entries
+  are the same 2019 data) — diverges only once the simulation reaches
+  2020. Per §24, can be restarted from the full-air run at 1 January
+  2020 (matching the paper's own approach, §22) via a rebuild pointing at
+  this file instead of `ac_factor_full_air.dat`.
+- **no air**: `aircraft_specifier = ''`. Confirmed via direct code read
+  (`aircraft_emit.F90`): `if (air_specifier(1) == "") return` sets
+  `aircraft_cnt=0` and returns immediately, before the `ac_factor` file
+  read is ever reached — the SourceMods themselves don't need modifying
+  or removing for this case, only the namelist entry. Removing the
+  SourceMods entirely (considered, then rejected) would have reintroduced
+  the `microp_aero_init`/`cam_in` interface fixes (§4), unrelated to
+  aircraft emissions.
+
+## 26. DKRZ partition specifications (confirmed authoritative, from DKRZ's own docs)
+
+| Partition | Max nodes/job | Max runtime | Shared node use |
+|---|---|---|---|
+| `compute` | 512 | 8h | no |
+| `shared` | 1 | 7 days | yes |
+| `interactive` | 1 | 12h | yes |
+| `gpu` | 60 | 12h | yes |
+| `gpu-devel` | 1 | 30min | yes |
+
+The `shared` partition allows at most one node per job (for
+small/serial/single-node jobs). `compute`'s real node cap is 512, correcting
+this repo's own `config_batch.xml` placeholder (`nodemax="500"`,
+originally flagged as unconfirmed) — worth fixing in that file, not yet
+done.
+
+## 27. Node-count scaling test: real speedup, real cost, zero effect on results
+
+Same 1-month, 10-instance "no air" workload, run at two node counts on
+`compute`:
+
+| Nodes | Tasks | Wall-clock (1 month) | Node-hours |
+|---|---|---|---|
+| 4 | 512 | 2:13:22 | ~8.9 |
+| 16 | 2048 | 0:44:56 | ~12.0 |
+
+~3x wall-clock speedup for 4x the nodes (~74% parallel efficiency); ~35%
+*more* total node-hours for the faster option — a genuine tradeoff
+(speed vs. compute budget), not a free win in both directions. Consistent
+across two independent 4-node runs ("full air" partial timeout data and
+"no air" completed run both gave ~2h/month).
+
+**Results confirmed decomposition-independent, not just theoretically but
+directly tested**: `T` field from the 4-node and 16-node runs, same
+instance, same day (`2019-01-31` daily-mean), bit-for-bit identical
+(max/mean abs diff = 0.0). Node count is a pure performance/cost choice
+here with zero risk of affecting output.
+
+## 28. January sanity check against the paper's Figure 2
+
+Computed from the completed January "full air"/"no air" 10-member
+ensembles (`full air − no air`, 2019 meteorology — the paper's green
+line). Ensemble-mean, area-weighted global means:
+
+- **Net TOA radiation** (`FSNT − FLNT`): difference = **0.378 W/m²**.
+  Confirmed against the actual paper figure (not just the abstract's
+  annual-mean ERF, ~62 mW/m², which is a different quantity/period): the
+  paper's own Figure 2 January value is ~0.4 W/m² — close agreement.
+- **Ice water path** (`TGCLDIWP`): difference = 0.263 g/m². Not
+  comparable to the paper's Figure 2(c) as computed — that panel's units
+  (g/kg) indicate a cloud-top ice **mixing ratio**, not a column-
+  integrated path (kg/m² vs. g/kg are different physical quantities, not
+  interchangeable via a unit conversion). Likely candidate found:
+  `ICIMR` ("prognostic in-cloud ice mixing ratio", kg/kg, full 3D field
+  `time,lev,lat,lon`) — needs per-column extraction at the actual
+  cloud-top level (not a fixed level index), analogous to how `AREI`/
+  `NUMICE` (also already in the default `h0` output) are presumably
+  defined. Not yet implemented — deferred to a full pass covering all of
+  Figure 2/3's variables together, once more months of data exist.
+- **Land surface temperature**: CAM's `TS` is mixed land/ocean/ice: used
+  CLM's own `TSKIN` ("skin temperature") instead, land-area-weighted
+  (`landfrac` × cos(lat), CLM's monthly `h0` file). Difference =
+  **0.0065 K** — consistent with the paper's own statement that this
+  quantity takes ~4-5 months to stabilize; near-zero this early is
+  expected, not a null result.
+
+Both statistically-robust (differences well above ensemble spread — e.g.
+net TOA: 0.378 W/m² diff vs. ~0.03-0.055 W/m² ensemble std) and physically
+sensible in sign and rough magnitude. Good indication the full pipeline
+(nudging, GAIA emissions, contrail SourceMods, ensemble mechanism) is
+producing a real, correctly-signed aviation effect at approximately the
+right scale, one month in.
+
+## 29. Continuing to 4 months total
+
+Both "full air" and "no air" cases resumed from their 1 February 2019
+restart (`CONTINUE_RUN=TRUE`, `STOP_N=3` — relative to the restart point,
+not the original start date) for 3 further months, at 4 nodes.
+`JOB_WALLCLOCK_TIME` raised from 4h to 7:30 (3 months × ~2.2h/month ≈
+6.6h estimated; original 4h caused the "full air" 6-month attempt to
+`TIMEOUT` rather than complete). Both jobs confirmed starting from the
+correct date (`2019-02-01`) via the same log-grep method used throughout
+this project.
+
+## 30. Updated still-open items
+
+- `ICIMR`/`AREI`/`NUMICE` cloud-top extraction (per-column, not fixed
+  level index) — needed for a proper Figure 2(c)-(e) comparison, deferred
+  to a full multi-variable pass (§28).
+- `config_batch.xml`'s `nodemax="500"` for `compute` should be corrected
+  to `512` (§26) — not yet done.
+- Everything in Session 4's §21 not superseded above remains open
+  (namelist architecture for `eta`/`Q`/`ac_factor` path, still deferred
+  per §24's reasoning above).
